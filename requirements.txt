@@ -1,0 +1,17 @@
+# Production Database Migration Requirements
+# Python 3.11+
+
+# Core dependencies
+pandas>=2.0.0
+sqlalchemy>=2.0.0
+pymssql>=2.2.8
+psycopg2-binary>=2.9.9
+uuid6>=2024.1.12
+
+# Retry logic (optional, for future enhancements)
+tenacity>=8.2.3
+
+# Development dependencies (optional)
+# pytest>=7.4.0
+# black>=23.0.0
+# flake8>=6.0.0
