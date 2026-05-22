@@ -107,18 +107,20 @@ class MigrationTracker:
                         return existing[0]
                 
                 # Create new migration record
+                import json
+                metadata_json = json.dumps(metadata) if metadata else None
                 result = conn.execute(
                     text("""
                         INSERT INTO migration_log 
                         (migration_name, batch_id, status, metadata)
-                        VALUES (:name, :batch, :status, :metadata::jsonb)
+                        VALUES (:name, :batch, :status, :metadata_val)
                         RETURNING id
                     """),
                     {
                         "name": migration_name,
                         "batch": batch_id,
                         "status": MigrationStatus.IN_PROGRESS.value,
-                        "metadata": str(metadata) if metadata else None
+                        "metadata_val": metadata_json
                     }
                 )
                 migration_id = result.fetchone()[0]
