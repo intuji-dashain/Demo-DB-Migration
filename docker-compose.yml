@@ -37,7 +37,7 @@ services:
   migration-engine:
     build:
       context: .
-      dockerfile: Dockerfile.migration
+      dockerfile: Dockerfile
     container_name: migration_worker
     environment:
       - MSSQL_HOST=sqlserver
