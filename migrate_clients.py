@@ -302,3 +302,216 @@ class ClientMigration:
             if migration_id:
                 self.tracker.fail_migration(migration_id, str(e))
             return False
+
+
+# ---------------------------------------------------------------------------
+# ClientCardMigration
+# ---------------------------------------------------------------------------
+
+# Default card validity window when no legacy issued/expiry dates exist.
+_CARD_VALIDITY_YEARS = 3
+
+
+class ClientCardMigration:
+    """
+    Migrates client cards from tblClient → client_cards (Batch 4).
+
+    Source: rows in tblClient where CardTypeID IS NOT NULL (one card per client).
+
+    issued_date  — defaults to DateCreated (no legacy column; adjust after discussion).
+    expiry_date  — defaults to issued_date + _CARD_VALIDITY_YEARS years.
+    """
+
+    SOURCE_TABLE = "tblClient"
+    TARGET_TABLE = "client_cards"
+
+    SOURCE_QUERY = """
+        SELECT
+            c.ClientID,
+            c.CardTypeID,
+            c.CardNumber,
+            c.Address,
+            c.Suburb,
+            c.Postcode,
+            c.DateCreated,
+            c.DateModified
+        FROM dbo.tblClient c
+        WHERE c.CardTypeID IS NOT NULL
+          AND c.CardNumber IS NOT NULL
+        ORDER BY c.ClientID
+    """
+
+    def __init__(self, source_engine: Engine, target_engine: Engine, id_mapper: IdMapper):
+        self.source_engine = source_engine
+        self.target_engine = target_engine
+        self.id_mapper     = id_mapper
+        self.tracker       = MigrationTracker(target_engine)
+
+    # ------------------------------------------------------------------ #
+    # Schema                                                               #
+    # ------------------------------------------------------------------ #
+
+    def _ensure_target_schema(self):
+        with self.target_engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS client_cards (
+                    id                  UUID PRIMARY KEY,
+                    client_card_type_id UUID NULL,
+                    client_id           UUID NOT NULL,
+                    card_number         VARCHAR(255) NOT NULL,
+                    issued_address      VARCHAR(255) NULL,
+                    suburb              VARCHAR(255) NULL,
+                    postcode            VARCHAR(255) NULL,
+                    issued_date         DATE NOT NULL,
+                    expiry_date         DATE NOT NULL,
+                    created_at          TIMESTAMP WITH TIME ZONE NULL,
+                    updated_at          TIMESTAMP WITH TIME ZONE NULL,
+                    creator_user_id     UUID NULL
+                );
+            """))
+        logger.info("✓ client_cards schema verified")
+
+    # ------------------------------------------------------------------ #
+    # Extract                                                              #
+    # ------------------------------------------------------------------ #
+
+    def _extract(self) -> pd.DataFrame:
+        df = pd.read_sql(self.SOURCE_QUERY, self.source_engine)
+        logger.info(f"✓ Extracted {len(df)} client card rows from source")
+        return df
+
+    # ------------------------------------------------------------------ #
+    # Transform                                                            #
+    # ------------------------------------------------------------------ #
+
+    def _transform(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        from dateutil.relativedelta import relativedelta
+
+        records: List[Dict[str, Any]] = []
+        client_map    = self.id_mapper.get_all("tblClient")
+        card_type_map = self.id_mapper.get_all("tblCardType")
+        now           = datetime.utcnow()
+
+        skipped = 0
+        for _, row in df.iterrows():
+            source_client_id = str(int(row["ClientID"]))
+
+            # client_id is NOT NULL — skip if mapping missing
+            client_id = client_map.get(source_client_id)
+            if client_id is None:
+                logger.warning(
+                    f"  Skipping card for ClientID={source_client_id}: "
+                    "no client mapping found"
+                )
+                skipped += 1
+                continue
+
+            new_id = str(uuid6.uuid7())
+
+            card_type_legacy = _clean(row.get("CardTypeID"))
+            card_type_id = (
+                card_type_map.get(str(int(card_type_legacy)))
+                if card_type_legacy is not None
+                else None
+            )
+
+            # issued_date: use DateCreated if available, else today
+            raw_created = _clean(row.get("DateCreated"))
+            if raw_created is not None:
+                issued_date = pd.Timestamp(raw_created).date()
+            else:
+                issued_date = now.date()
+
+            expiry_date = (
+                pd.Timestamp(issued_date) + relativedelta(years=_CARD_VALIDITY_YEARS)
+            ).date()
+
+            records.append({
+                "id":                  new_id,
+                "client_card_type_id": card_type_id,
+                "client_id":           client_id,
+                "card_number":         str(row["CardNumber"]).strip(),
+                "issued_address":      _clean(row.get("Address")),
+                "suburb":              _clean(row.get("Suburb")),
+                "postcode":            _clean(row.get("Postcode")),
+                "issued_date":         issued_date,
+                "expiry_date":         expiry_date,
+                "created_at":          raw_created or now,
+                "updated_at":          _clean(row.get("DateModified")) or now,
+                "creator_user_id":     None,
+            })
+
+        logger.info(
+            f"✓ Transformed {len(records)} client cards "
+            f"({skipped} skipped — missing client FK)"
+        )
+        return records
+
+    # ------------------------------------------------------------------ #
+    # Load                                                                 #
+    # ------------------------------------------------------------------ #
+
+    def _load(self, records: List[Dict[str, Any]]):
+        if config.DRY_RUN:
+            logger.info(f"[DRY RUN] Would insert {len(records)} client cards")
+            return 0, 0
+
+        stmt = text("""
+            INSERT INTO client_cards (
+                id, client_card_type_id, client_id, card_number,
+                issued_address, suburb, postcode,
+                issued_date, expiry_date,
+                created_at, updated_at, creator_user_id
+            ) VALUES (
+                :id, :client_card_type_id, :client_id, :card_number,
+                :issued_address, :suburb, :postcode,
+                :issued_date, :expiry_date,
+                :created_at, :updated_at, :creator_user_id
+            )
+            ON CONFLICT (id) DO NOTHING;
+        """)
+
+        success, failed = 0, 0
+        for start in range(0, len(records), config.BATCH_SIZE):
+            batch = records[start: start + config.BATCH_SIZE]
+            try:
+                with self.target_engine.begin() as conn:
+                    for rec in batch:
+                        conn.execute(stmt, rec)
+                success += len(batch)
+                logger.info(f"  ✓ Inserted batch {start // config.BATCH_SIZE + 1} ({len(batch)} rows)")
+            except SQLAlchemyError as e:
+                logger.error(f"  Batch failed at index {start}: {e}")
+                failed += len(batch)
+                if not config.CONTINUE_ON_ERROR:
+                    raise
+        return success, failed
+
+    # ------------------------------------------------------------------ #
+    # Run                                                                  #
+    # ------------------------------------------------------------------ #
+
+    def run(self) -> bool:
+        logger.info("=" * 70)
+        logger.info("Starting Client Cards Migration (tblClient → client_cards)")
+        logger.info("=" * 70)
+        batch_id     = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        migration_id = None
+        try:
+            self._ensure_target_schema()
+            migration_id = self.tracker.start_migration("client_cards_migration", batch_id)
+            df           = self._extract()
+            if df.empty:
+                logger.warning("No client cards to migrate")
+                self.tracker.complete_migration(migration_id, 0, 0)
+                return True
+            records         = self._transform(df)
+            success, failed = self._load(records)
+            self.tracker.complete_migration(migration_id, success, failed)
+            logger.info(f"✓ Client Cards migration complete: {success} inserted, {failed} failed")
+            return failed == 0
+        except Exception as e:
+            logger.error(f"✗ Client Cards migration failed: {e}", exc_info=True)
+            if migration_id:
+                self.tracker.fail_migration(migration_id, str(e))
+            return False

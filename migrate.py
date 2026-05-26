@@ -14,7 +14,7 @@ from sqlalchemy.engine import Engine
 from config import config
 from id_mapper import IdMapper
 from migrate_admin_lookups import AdminLookupsMigration
-from migrate_clients import ClientMigration
+from migrate_clients import ClientMigration, ClientCardMigration
 from migrate_service_providers import ServiceProviderMigration
 from migrate_budget_years import BudgetYearMigration
 from migrate_budget_transactions import BudgetTransactionMigration
@@ -89,6 +89,7 @@ def main():
             # ("Budget Transactions", BudgetTransactionMigration(source_engine, target_engine, id_mapper, by_migration)),
             ("Admin Lookups",       AdminLookupsMigration(source_engine, target_engine, id_mapper)),
             ("Clients",             ClientMigration(source_engine, target_engine, id_mapper)),
+            ("Client Cards",        ClientCardMigration(source_engine, target_engine, id_mapper)),
         ]
 
         for name, migration in steps:
