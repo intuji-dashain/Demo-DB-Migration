@@ -11,8 +11,8 @@ import numpy as np
 import uuid6
 from sqlalchemy import text, Engine
 
-from config import config
-from id_mapper import IdMapper
+from core.config import config
+from core.id_mapper import IdMapper
 
 logger = logging.getLogger(__name__)
 

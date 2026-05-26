@@ -33,7 +33,7 @@ class MigrationConfig:
     
     # Logging
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
-    LOG_FILE: Optional[str] = "migration.log"
+    LOG_FILE: Optional[str] = "migration.log"  # written to logs/ by the entrypoint
     
     # Source Database (SQL Server)
     MSSQL_HOST: str = os.getenv('MSSQL_HOST', 'sqlserver')

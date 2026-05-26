@@ -11,13 +11,13 @@ import time
 from typing import Optional, Tuple
 from sqlalchemy.engine import Engine
 
-from config import config
-from id_mapper import IdMapper
-from migrate_admin_lookups import AdminLookupsMigration
-from migrate_clients import ClientMigration, ClientCardMigration
-from migrate_service_providers import ServiceProviderMigration
-from migrate_budget_years import BudgetYearMigration
-from migrate_budget_transactions import BudgetTransactionMigration
+from core.config import config
+from core.id_mapper import IdMapper
+from migrations.admin_lookups import AdminLookupsMigration
+from migrations.clients import ClientMigration, ClientCardMigration
+from migrations.service_providers import ServiceProviderMigration
+from migrations.budget_years import BudgetYearMigration
+from migrations.budget_transactions import BudgetTransactionMigration
 
 
 logging.basicConfig(
@@ -25,7 +25,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(config.LOG_FILE) if config.LOG_FILE else logging.NullHandler(),
+        logging.FileHandler(f"logs/{config.LOG_FILE}") if config.LOG_FILE else logging.NullHandler(),
     ],
 )
 logger = logging.getLogger(__name__)

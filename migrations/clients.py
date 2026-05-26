@@ -20,9 +20,9 @@ import uuid6
 from sqlalchemy import text, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import config
-from id_mapper import IdMapper
-from migration_tracker import MigrationTracker
+from core.config import config
+from core.id_mapper import IdMapper
+from core.tracker import MigrationTracker
 
 logger = logging.getLogger(__name__)
 

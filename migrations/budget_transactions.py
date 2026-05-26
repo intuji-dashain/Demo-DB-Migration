@@ -45,9 +45,9 @@ import uuid6
 from sqlalchemy import text, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import config
-from id_mapper import IdMapper
-from migrate_budget_years import BudgetYearMigration
+from core.config import config
+from core.id_mapper import IdMapper
+from migrations.budget_years import BudgetYearMigration
 
 logger = logging.getLogger(__name__)
 
