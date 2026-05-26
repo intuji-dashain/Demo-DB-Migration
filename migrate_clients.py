@@ -64,6 +64,7 @@ _INDIGENOUS_MAP: Dict[str, str] = {
 _GENDER_MAP: Dict[str, str] = {
     "M":      "MALE",
     "F":      "FEMALE",
+    "U": "UNSPECIFIED",
 }
 
 
@@ -81,8 +82,8 @@ def _normalise_indigenous(raw: Optional[str]) -> str:
 
 def _normalise_gender(raw: Optional[str]) -> str:
     if not raw:
-        return "OTHER"
-    return _GENDER_MAP.get(str(raw).strip().lower(), "OTHER")
+        return "UNSPECIFIED"
+    return _GENDER_MAP.get(str(raw).strip().upper(), "UNSPECIFIED")
 
 
 # ---------------------------------------------------------------------------
