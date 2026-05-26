@@ -7,6 +7,7 @@ sqlalchemy>=2.0.0
 pymssql>=2.2.8
 psycopg2-binary>=2.9.9
 uuid6>=2024.1.12
+python-dotenv>=1.0.0
 
 # Retry logic (optional, for future enhancements)
 tenacity>=8.2.3

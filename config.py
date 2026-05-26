@@ -5,6 +5,9 @@ Centralized settings for database migration operations
 import os
 from dataclasses import dataclass
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()  # loads .env from the current working directory
 
 
 @dataclass
@@ -38,6 +41,7 @@ class MigrationConfig:
     MSSQL_PASSWORD: str = os.getenv('MSSQL_PASSWORD', '')
     MSSQL_DB: str = os.getenv('MSSQL_DB', 'source_db')
     MSSQL_PORT: int = int(os.getenv('MSSQL_PORT', '1433'))
+    MSSQL_STRING: Optional[str] = os.getenv('MSSQL_STRING')  # Optional full connection string
     
     # Target Database (PostgreSQL)
     POSTGRES_HOST: str = os.getenv('POSTGRES_HOST', 'postgres')
@@ -45,6 +49,8 @@ class MigrationConfig:
     POSTGRES_PASSWORD: str = os.getenv('POSTGRES_PASSWORD', '')
     POSTGRES_DB: str = os.getenv('POSTGRES_DB', 'destination_db')
     POSTGRES_PORT: int = int(os.getenv('POSTGRES_PORT', '5432'))
+    POSTGRES_STRING: Optional[str] = os.getenv('POSTGRES_STRING')  # Optional full connection string
+    
     
     # Migration control
     DRY_RUN: bool = os.getenv('DRY_RUN', 'false').lower() == 'true'
@@ -53,10 +59,10 @@ class MigrationConfig:
     
     def __post_init__(self):
         """Validate configuration after initialization"""
-        if not self.MSSQL_PASSWORD:
-            raise ValueError("MSSQL_PASSWORD is required")
-        if not self.POSTGRES_PASSWORD:
-            raise ValueError("POSTGRES_PASSWORD is required")
+        if not self.MSSQL_STRING and not self.MSSQL_PASSWORD:
+            raise ValueError("Either MSSQL_STRING or MSSQL_PASSWORD is required")
+        if not self.POSTGRES_STRING and not self.POSTGRES_PASSWORD:
+            raise ValueError("Either POSTGRES_STRING or POSTGRES_PASSWORD is required")
         if self.BATCH_SIZE < 1:
             raise ValueError("BATCH_SIZE must be at least 1")
         if self.MAX_RETRIES < 1:
